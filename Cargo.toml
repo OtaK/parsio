@@ -1,0 +1,28 @@
+[package]
+name = "parsio"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.85"
+include = ["src/**/*", "LICENSE-*", "README.md"]
+description = "Parser-related I/O utilities"
+readme = "README.md"
+documentation = "https://docs.rs/parsio"
+repository = "https://github.com/OtaK/parsio"
+license = "MIT OR Apache-2.0"
+keywords = ["parser", "io", "no_std"]
+categories = ["parsing", "wasm"]
+authors = ["Mathieu Amiot <amiot.mathieu@gmail.com>"]
+
+[package.metadata.docs.rs]
+features = [
+    "std",
+]
+rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
+
+[features]
+default = ["std"]
+alloc = []
+std = ["alloc", "thiserror/std"]
+
+[dependencies]
+thiserror = { version = "2", default-features = false }
