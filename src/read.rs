@@ -20,6 +20,8 @@ pub trait Read<'data> {
     /// Read a byte array from the data stream of len `N`
     /// Basically behaves the same as [`Self::read_slice`] but with a sized slice
     fn read_array<const N: usize>(&mut self) -> ReadResult<Cow<'data, [u8; N]>>;
+    /// Reads the data stream till EOF
+    fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>>;
 
     /// Starts a checkpointed read, which allows you to track how many bytes
     /// total were read during that time
@@ -154,6 +156,11 @@ impl<'data, R: Read<'data>> Read<'data> for DepthAwareReader<'data, R> {
     fn read_array<const N: usize>(&mut self) -> ReadResult<Cow<'data, [u8; N]>> {
         self.reader.read_array()
     }
+
+    #[inline(always)]
+    fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>> {
+        self.reader.read_till_eof()
+    }
 }
 
 /// Implementation on base slices. This is what you'd want to use when having something that can hold
@@ -221,6 +228,111 @@ impl<'data> Read<'data> for &'data [u8] {
         // > SAFETY: The underlying array of a slice can be reinterpreted as an actual
         // > array `[T; N]` if `N` is not greater than the slice's length.
         Ok(Cow::Borrowed(unsafe { &*start.as_ptr().cast() }))
+    }
+
+    #[inline]
+    fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>> {
+        self.read_slice(self.len())
+    }
+}
+
+impl<'data> Read<'data> for Vec<u8> {
+    #[inline(always)]
+    fn peek_byte(&mut self) -> ReadResult<u8> {
+        self.as_slice().peek_byte()
+    }
+
+    #[inline]
+    fn advance(&mut self, n: usize) -> ReadResult<()> {
+        if n > self.len() {
+            return Err(ReadError::IoError(std::io::ErrorKind::UnexpectedEof));
+        }
+        self.drain(..n);
+        Ok(())
+    }
+
+    #[inline]
+    fn read_byte(&mut self) -> ReadResult<u8> {
+        let b = self.peek_byte()?;
+        self.advance(1)?;
+        Ok(b)
+    }
+
+    #[inline]
+    fn read_slice(&mut self, len: usize) -> ReadResult<Cow<'data, [u8]>> {
+        if len > self.len() {
+            return Err(ReadError::IoError(std::io::ErrorKind::UnexpectedEof));
+        }
+        let end = self.split_off(len);
+        Ok(Cow::Owned(std::mem::replace(self, end)))
+    }
+
+    #[inline]
+    /// Careful, this double copies, hurting the performance quite a bit. Prefer using a StdReader for this
+    fn read_array<const N: usize>(&mut self) -> ReadResult<Cow<'data, [u8; N]>> {
+        if N > self.len() {
+            return Err(ReadError::IoError(std::io::ErrorKind::UnexpectedEof));
+        }
+
+        let end = self.split_off(N);
+        let target = std::mem::replace(self, end);
+        let mut array = [0u8; N];
+        array.copy_from_slice(&target);
+        Ok(Cow::Owned(array))
+    }
+
+    fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>> {
+        Ok(Cow::Owned(std::mem::take(self)))
+    }
+}
+
+impl<'data> Read<'data> for Cow<'data, [u8]> {
+    #[inline]
+    fn peek_byte(&mut self) -> ReadResult<u8> {
+        match self {
+            Cow::Borrowed(slice) => slice.peek_byte(),
+            Cow::Owned(vec) => vec.as_slice().peek_byte(),
+        }
+    }
+
+    #[inline]
+    fn advance(&mut self, n: usize) -> ReadResult<()> {
+        match self {
+            Cow::Borrowed(slice) => slice.advance(n),
+            Cow::Owned(vec) => vec.advance(n),
+        }
+    }
+
+    #[inline]
+    fn read_byte(&mut self) -> ReadResult<u8> {
+        match self {
+            Cow::Borrowed(slice) => slice.read_byte(),
+            Cow::Owned(vec) => vec.read_byte(),
+        }
+    }
+
+    #[inline]
+    fn read_slice<'a>(&'a mut self, len: usize) -> ReadResult<Cow<'data, [u8]>> {
+        match self {
+            Cow::Borrowed(slice) => slice.read_slice(len),
+            Cow::Owned(vec) => vec.read_slice(len),
+        }
+    }
+
+    #[inline]
+    fn read_array<const N: usize>(&mut self) -> ReadResult<Cow<'data, [u8; N]>> {
+        match self {
+            Cow::Borrowed(slice) => slice.read_array(),
+            Cow::Owned(vec) => vec.read_array(),
+        }
+    }
+
+    #[inline]
+    fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>> {
+        match self {
+            Cow::Borrowed(slice) => slice.read_till_eof(),
+            Cow::Owned(vec) => vec.read_till_eof(),
+        }
     }
 }
 
@@ -305,6 +417,14 @@ impl<'data, T: std::io::Read> Read<'data> for StdReader<T> {
         let mut arr = [0; N];
         self.0.read_exact(&mut arr)?;
         Ok(Cow::Owned(arr))
+    }
+
+    #[inline]
+    fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>> {
+        use std::io::Read as _;
+        let mut buf = vec![];
+        self.0.read_to_end(&mut buf)?;
+        Ok(Cow::Owned(buf))
     }
 }
 

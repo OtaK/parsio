@@ -68,4 +68,11 @@ impl<'a, 'data, R: Read<'data>> Read<'data> for Checkpoint<'a, 'data, R> {
         self.amt_read += N;
         Ok(array)
     }
+
+    #[inline]
+    fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>> {
+        let bytes = self.inner.read_till_eof()?;
+        self.amt_read += bytes.len();
+        Ok(bytes)
+    }
 }
