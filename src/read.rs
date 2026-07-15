@@ -1,11 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    checkpoint::Checkpoint,
-    error::{ReadError, ReadResult},
-};
-
-pub mod checkpoint;
+use crate::error::{ReadError, ReadResult};
 
 pub trait Read<'data> {
     /// Peek a single byte over the data stream, without advancing it.
@@ -22,23 +17,6 @@ pub trait Read<'data> {
     fn read_array<const N: usize>(&mut self) -> ReadResult<Cow<'data, [u8; N]>>;
     /// Reads the data stream till EOF
     fn read_till_eof(&mut self) -> ReadResult<Cow<'data, [u8]>>;
-
-    /// Starts a checkpointed read, which allows you to track how many bytes
-    /// total were read during that time
-    ///
-    /// This is a fringe use for certain data formats that communicate
-    /// the byte length instead of the number of items for item collections (eg: TLSPL)
-    #[inline]
-    fn checkpoint<'a>(&'a mut self) -> Checkpoint<'a, 'data, Self>
-    where
-        Self: Sized,
-    {
-        Checkpoint {
-            inner: self,
-            amt_read: 0,
-            _boo: Default::default(),
-        }
-    }
 }
 
 #[derive(Debug)]
