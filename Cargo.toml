@@ -1,28 +1,50 @@
 [package]
 name = "parsio"
-version = "0.0.2"
+version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
-include = ["src/**/*", "LICENSE-*", "README.md"]
+rust-version = "1.95"
+include = ["src/**/*", "LICENSE-*", "README.md", "CHANGELOG.md"]
 description = "Parser-related I/O utilities"
 readme = "README.md"
 documentation = "https://docs.rs/parsio"
 repository = "https://github.com/OtaK/parsio"
 license = "MIT OR Apache-2.0"
-keywords = ["parser", "io", "no_std"]
+keywords = ["parser", "io"]
 categories = ["parsing", "wasm"]
 authors = ["Mathieu Amiot <amiot.mathieu@gmail.com>"]
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[[bench]]
+name = "instructions"
+harness = false
+
+[profile.bench]
+debug = true
 
 [package.metadata.docs.rs]
 features = [
     "std",
+    "simd",
 ]
 rustdoc-args = ["--cfg", "docsrs", "--generate-link-to-definition"]
 
 [features]
-default = ["std"]
-alloc = []
-std = ["alloc", "thiserror/std"]
+default = ["std", "simd"]
+# NOT READY: no_std support is blocked on `core::io::ErrorKind`, which is still unstable <https://github.com/rust-lang/rust/issues/154046>
+std = ["thiserror/std"]
+# SIMD-accelerated read_until scans (memchr)
+simd = ["dep:memchr"]
 
 [dependencies]
+memchr = { version = "2.8", default-features = false, optional = true }
 thiserror = { version = "2", default-features = false }
+
+[dev-dependencies]
+proptest = "1.12"
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+gungraun = "0.20"

@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Build
+        run: cargo build --all-features --verbose
+      - name: Test
+        run: cargo test --all-features --verbose --no-fail-fast
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Clippy (scalar scans)
+        run: cargo clippy --all-targets --no-default-features --features std -- -D warnings
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps --all-features
+      - name: Fuzz corpus replay
+        run: cargo test --manifest-path fuzz/Cargo.toml --lib
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          # Must match `rust-version` in Cargo.toml (std::cfg_select! needs 1.95).
+          toolchain: 1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --all-features --verbose --no-fail-fast
+      - name: Test (scalar scans, no memchr)
+        run: cargo test --no-default-features --features std --verbose --no-fail-fast
+
+  miri:
+    runs-on: ubuntu-latest
+    env:
+      MIRIFLAGS: -Zmiri-strict-provenance -Zmiri-tree-borrows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - uses: Swatinem/rust-cache@v2
+      - name: Miri
+        run: cargo miri test
+      - name: Miri (fuzz corpus replay)
+        # The corpus is embedded at build time by `fuzz/build.rs`, so this stays under Miri's
+        # default isolation -- no MIRIFLAGS needed.
+        run: cargo miri test --manifest-path fuzz/Cargo.toml --lib
+
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [read_ops, std_reader_adversarial, write_sinks, depth_accounting]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            fuzz
+      - name: Clippy
+        run: cargo +nightly clippy --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
+      - name: Fuzz ${{ matrix.target }}
+        # The runner's `cargo-fuzz` binary resolves its default target from the triple it was
+        # built for, which can be musl: ASAN then fails ("incompatible with statically linked
+        # libc") and the musl std is not installed. Pin the host triple so the default can't
+        # drift with the installed binary.
+        run: cargo +nightly fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} -- -max_total_time=60 -rss_limit_mb=2048
+
+  benches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        # Caches ~/.cargo/bin and target/, so gungraun-runner and saved baselines survive.
+      - name: Install valgrind
+        run: sudo apt-get update && sudo apt-get install -y valgrind
+      - name: Install the runner (must match the gungraun version)
+        run: cargo install gungraun-runner --version 0.20.0 --locked
+      - name: Cell inventory
+        run: cargo bench --bench instructions -- --list
+      - name: Smoke (no valgrind, no measuring)
+        run: |
+          cargo bench --bench instructions -- --test
+          cargo bench --bench throughput -- --test
+          cargo bench --bench throughput --no-default-features --features std -- --test
+      - name: Instruction counts, record the baseline
+        # Only main records. Saving also compares against the stored baseline, so a cell whose
+        # *shape* changed reports as a regression here; that belongs in the PR that changed it,
+        # main's job is to record. Exit 1 (misconfiguration) still fails.
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cargo bench --bench instructions -- --save-baseline=main || {
+            status=$?
+            if [ "$status" = 3 ]; then
+              echo "::notice::baseline updated; some cells differ from the previous baseline"
+              exit 0
+            fi
+            exit "$status"
+          }
+      - name: Instruction counts, compare against the baseline
+        # Exit code 3 means a cell regressed past the Ir soft limits; 1 means misconfiguration.
+        # Without a baseline this creates one instead of comparing, so it is safe on a fork.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          cargo bench --bench instructions -- --baseline=main || {
+            status=$?
+            if [ "$status" = 3 ]; then
+              echo "::error::instruction-count regression past the 10% soft limit"
+            fi
+            exit "$status"
+          }

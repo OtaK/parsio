@@ -1,0 +1,44 @@
+[package]
+name = "parsio-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.4", features = ["derive"] }
+parsio = { path = ".." }
+
+# Keeps this crate out of any surrounding workspace.
+[workspace]
+
+[[bin]]
+name = "read_ops"
+path = "fuzz_targets/read_ops.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "std_reader_adversarial"
+path = "fuzz_targets/std_reader_adversarial.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "write_sinks"
+path = "fuzz_targets/write_sinks.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "depth_accounting"
+path = "fuzz_targets/depth_accounting.rs"
+test = false
+doc = false
+bench = false

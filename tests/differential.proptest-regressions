@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 855b3b1983a2de122627b7ec5a17810ddaa2fe4630dca46283e22b667013e3b6 # shrinks to data = [0], ops = [], needle = [0], cap = 1, limit = 1
+cc 66074128931bc5797d1b47cd7d5d815f13dc2019c4b64bb885935c8008f5d5de # shrinks to data = [0, 1, 0], ops = [], needle = [0, 1], cap = 3, limit = 3
+cc 924d2797b34b32f934a0969363fbe608c560ac4c3878e7915d924e71f98e4042 # shrinks to data = [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], ops = [ReadSlice(7), ReadByte, ReadByte, IsEof], needle = [1, 1], cap = 1, limit = 12

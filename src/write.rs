@@ -98,13 +98,16 @@ impl Write for &mut [u8] {
     }
 
     // This is overridden because we don't need a loop; it can always be one-shot unless
-    // params are seriously wrong
+    // params are seriously wrong.
     #[inline]
     fn write_all(&mut self, buf: &[u8]) -> WriteResult<()> {
-        let expected_len = buf.len();
-        (self.write(buf)? == expected_len)
-            .then_some(())
-            .ok_or(WriteError::IoError(std::io::ErrorKind::WriteZero))
+        if buf.len() > self.len() {
+            return Err(WriteError::IoError(std::io::ErrorKind::WriteZero));
+        }
+        let (tbw, end) = std::mem::take(self).split_at_mut(buf.len());
+        tbw.copy_from_slice(buf);
+        *self = end;
+        Ok(())
     }
 
     #[inline]
@@ -191,11 +194,9 @@ impl<W: std::io::Write> Write for StdWriter<W> {
 
     #[inline]
     fn write_vectored(&mut self, bufs: &[&[u8]]) -> WriteResult<usize> {
-        let bufs = bufs
-            .iter()
-            .map(|s| std::io::IoSlice::new(s))
-            .collect::<Vec<_>>();
-        Ok(self.0.write_vectored(&bufs)?)
+        let mut iovecs = Vec::with_capacity(bufs.len());
+        iovecs.extend(bufs.iter().map(|&buf| std::io::IoSlice::new(buf)));
+        Ok(self.0.write_vectored(&iovecs)?)
     }
 }
 
