@@ -12,11 +12,23 @@ This makes use of quite a bit of unsafe for speed purposes.
 
 See the docs to see if it fits you.
 
-As an example on how to use this crate, you can check out [seabored](https://crates.io/crates/seabored). As a matter of fact, this crate contains & extracts the I/O traits developed for `seabored`.
+As an example on how to use this crate, you can check out [seabored](https://crates.io/crates/seabored).
+As a matter of fact, this crate contains & extracts the I/O traits developed for `seabored`.
+
+## Examples
+
+The `examples/` folder contains toy CSV & TLV parsers to show how stuff can work.
+
+```console
+cargo run --example tlv
+cargo run --example csv
+```
 
 ## AI Disclaimer
 
-Unlike a lot of things being created currently, this library was written WITHOUT the use of any LLM.
+Unlike a lot of things being created currently, the code of this library was written WITHOUT the use of any LLM. Anything under /src was 100% hand-written.
+
+The test infrastructure, on the other hand, was LLM-assisted, because I can't be bothered. Same goes for the examples, which were completely LLM-gen'd.
 
 ## License
 
