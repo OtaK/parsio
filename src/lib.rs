@@ -3,7 +3,7 @@
 
 #[cfg(not(feature = "std"))]
 compile_error!(
-    "This library requires the `std` feature enabled until core::io::ErrorKind gets stabilized"
+    "This library requires the `std` feature enabled until core::io::ErrorKind gets stabilized, cf. <https://github.com/rust-lang/rust/issues/154046>"
 );
 
 mod error;

@@ -1,4 +1,5 @@
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum WriteError {
     #[error("IO Error: {0}")]
     IoError(std::io::ErrorKind),
@@ -19,13 +20,14 @@ impl From<std::io::Error> for WriteError {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ReadError {
     #[error("IO Error: {0}")]
     IoError(std::io::ErrorKind),
     #[error(
         "Allowed depth exceeded (billion laughs detected?), we are {depth} levels deep but only {limit} is allowed"
     )]
-    AllowedDepthOverflow { depth: usize, limit: usize },
+    AllowedDepthOverflow { depth: u16, limit: u16 },
 }
 
 impl From<std::io::ErrorKind> for ReadError {
